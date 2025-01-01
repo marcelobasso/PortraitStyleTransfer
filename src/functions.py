@@ -11,7 +11,7 @@ import scipy.ndimage.interpolation
 import scipy.spatial
 import scipy.interpolate
 from skimage.draw import polygon
-from scipy.interpolate import interp2d
+from scipy.interpolate import RegularGridInterpolator
 
 #Reads an image with given path as grayscale
 def readGrayScale(path):
@@ -109,13 +109,9 @@ def computeAffine(tri_points1, tri_points2):
     return T
 
 
-#Linear interpolations
+# Linear interpolations
 def interp(fraction, item1, item2):
     return ((1-fraction) * item1) + (fraction * item2)
-
-#Returns an interp2d function
-def interpFunc(xs, ys, image):
-    return interp2d(xs, ys, image)
 
 #Low pass of a given IMAGE with kernel SIZE and SIGMA
 def lowPass(image, size, sigma):
@@ -181,13 +177,14 @@ def sumStack(stack):
         final_image += stack[i]
     return rescale(final_image)
 
-#Warps IMAGE with SOURCE_POINTS to TARGET_POINTS with TRI
+# Warps IMAGE with SOURCE_POINTS to TARGET_POINTS with TRI
 def warp(image, source_points, target_points, tri):
     imh, imw = image.shape
     out_image = np.zeros((imh, imw))
     xs = np.arange(imw)
     ys = np.arange(imh)
-    interpFN = interpFunc(xs, ys, image)
+
+    interpFN = RegularGridInterpolator((ys, xs), image, bounds_error=False, fill_value=0)
 
     for triangle_indices in tri.simplices:
 
@@ -202,16 +199,17 @@ def warp(image, source_points, target_points, tri):
         row_coordinates, col_coordinates = polygon(tri_rows, tri_cols)
 
         for x, y in zip(col_coordinates, row_coordinates):
-            #point inside target triangle mesh
-            point_in_target = np.array((x, y, 1))
+            # Point inside target triangle mesh
+            point_in_target = np.array([x, y, 1])
 
-            #point inside source image
+            # Point inside source image
             point_on_source = np.dot(A_inverse, point_in_target)
 
-            x_source = point_on_source[0]
-            y_source = point_on_source[1]
+            x_source, y_source = point_on_source[:2]
 
-            source_value = interpFN(x_source, y_source)
+            # Interpolate source value
+            source_value = interpFN([y_source, x_source])  # Note: (y, x) order for RegularGridInterpolator
+
             try:
                 out_image[y, x] = source_value
             except IndexError:

@@ -1,3 +1,17 @@
+"""
+This file opens up each image, using ginput and 
+allows to click and select locations for 
+correspondence points.
+
+Argus:
+    First image to choose points on without extension.
+    Second image to choose points on without extension
+    Number of points to be selected on each image.
+
+Example: 
+    $ python3 ./inputs.py jose george 43
+"""
+
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,10 +22,10 @@ from scipy.spatial import Delaunay
 imname = sys.argv[1]
 im2name = sys.argv[2]
 num_points = int(sys.argv[3])
-image1 = skio.imread('./images/' + imname + '.jpg')
+image1 = skio.imread('./assets/inputs/' + imname + '.jpg')
 image1_full = sk.img_as_float(image1)
 
-image2 = skio.imread('./images/' + im2name + '.jpg')
+image2 = skio.imread('./assets/inputs/' + im2name + '.jpg')
 image2_full = sk.img_as_float(image2)
 
 plt.imshow(image1_full)

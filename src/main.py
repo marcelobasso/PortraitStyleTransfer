@@ -1,3 +1,21 @@
+"""
+This file contains out algorithm for style transfer. 
+Time of execution is approximately 4 minutes with 
+image being of size 602x750.
+
+Args:
+
+    Input image, the image to have style transfer to it. Do not include the file extension, please put this image in images/ folder.
+    Example image, the image to transfer style from. Do not include the file extension, please put this image in images/ folder.
+    Bool: result in grayscale.
+    Bool: binary mask in the Laplacian stacks
+    Bool: correspondences found manually
+    Name of file to be outputted. Do not include extension.
+
+Example: 
+    $ python3 ./main.py jose george false true false jose_george_test
+"""
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,24 +24,23 @@ import skimage.io as skio
 import cv2
 import skimage.transform as sktr
 from imutils import face_utils
-import imutils
-import argparse
 import dlib
 from functions import *
 
 def getFacialLandmarks(image):
     detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
+    predictor = dlib.shape_predictor('src/shape_predictor_68_face_landmarks.dat')
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     rects = detector(gray, 1)
-    #plt.figure()
+    # plt.figure()
     triangulation = None
     shape = None
+
     # loop over the face detections
     for (i, rect) in enumerate(rects):
-        # determine the facial landmarks for the face region, then
-        # convert the facial landmark (x, y)-coordinates to a NumPy
-        # array
+        # # determine the facial landmarks for the face region, then
+        # # convert the facial landmark (x, y)-coordinates to a NumPy
+        # # array
         shape = predictor(image, rect)
         shape = face_utils.shape_to_np(shape)
 
@@ -36,10 +53,10 @@ def getFacialLandmarks(image):
         # cv2.putText(image, "Face #{}".format(i + 1), (x - 10, y - 10),
         # 	cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # loop over the (x, y)-coordinates for the facial landmarks
-        # and draw them on the image
-        #for (x, y) in shape:
-            #plt.scatter(x, y, s=10)
+        # # loop over the (x, y)-coordinates for the facial landmarks
+        # # and draw them on the image
+        # for (x, y) in shape:
+        #     plt.scatter(x, y, s=10)
 
 
         corners = [(0,0), (image.shape[1],0), (0, image.shape[0]), (image.shape[1], image.shape[0])]
@@ -116,7 +133,7 @@ def configureBackground(image, mask, im2name):
     mask = np.bitwise_or(np.roll(mask, -6, axis=0), mask)
 
     background = cv2.inpaint(image, mask, 3, cv2.INPAINT_TELEA)
-    saveImage('./images/' + im2name + '_background.jpg', background)
+    saveImage('./assets/outputs/' + im2name + '_background.jpg', background)
 
 #This is based more off of the matlab code
 def styleTransfer(input, example, input_mask, example_mask, input_channel, example_channel, inputShape, exampleShape, useMask):
@@ -141,14 +158,16 @@ def styleTransfer(input, example, input_mask, example_mask, input_channel, examp
     output = sumStack(gainStack)
     return rescale(output)
 
+print(sys.argv)
+
 imname = sys.argv[1]
 im2name = sys.argv[2]
-gray = True if sys.argv[3].lower() == 'true' else False
-useMask = True if sys.argv[4].lower() == 'true' else False
-usePoints = True if sys.argv[5].lower() == 'true' else False
+gray = sys.argv[3].lower() == 'true'
+useMask = sys.argv[4].lower() == 'true'
+usePoints = sys.argv[5].lower() == 'true'
 outname = sys.argv[6]
 
-folder = './images/'
+folder = 'assets/inputs/'
 file_type = '.jpg'
 _mask = '_mask'
 _background = '_background'
@@ -186,14 +205,14 @@ else:
     background_blue = background_colors[2]
 
     red = styleTransfer(input, example, input_mask_gray, example_mask_gray, input_colors[0], example_colors[0], inputShape, exampleShape, useMask)
-
     green = styleTransfer(input, example, input_mask_gray, example_mask_gray, input_colors[1], example_colors[1], inputShape, exampleShape, useMask)
-
     blue = styleTransfer(input, example, input_mask_gray, example_mask_gray, input_colors[2], example_colors[2], inputShape, exampleShape, useMask)
 
     red = (background_red * (1-input_mask_gray)) + (red * input_mask_gray)
     green = (background_green * (1-input_mask_gray)) + (green * input_mask_gray)
     blue = (background_blue * (1-input_mask_gray)) + (blue * input_mask_gray)
+    
     output = np.dstack([red, green, blue])
 showImage(output)
-saveImage('./' + outname + file_type, output)
+
+saveImage('./assets/outputs/' + outname + file_type, output)

@@ -1,3 +1,17 @@
+"""
+This file opens up an image and allows you 
+to draw and save a binary mask. The code 
+written in this file is not our own. 
+The instructions to use this code is found at:
+https://github.com/nikhilushinde/cs194-26_proj3_2.2
+
+Args:
+    Entire path of image to draw mask around
+
+Example: 
+    $ python3 ./make_mask.py ./jose.jpg
+"""
+
 import cv2
 import sys
 import numpy as np
