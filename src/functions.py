@@ -1,39 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import skimage as sk
 import skimage.io as skio
 import cv2
-import skimage.filters
-import scipy.misc
-import skimage.color
-import scipy.sparse
 import scipy.ndimage.interpolation
 import scipy.spatial
 import scipy.interpolate
 from skimage.draw import polygon
 from scipy.interpolate import RegularGridInterpolator
-
-#Reads an image with given path as grayscale
-def readGrayScale(path):
-    image = skio.imread(path)
-    image = sk.img_as_float(image)
-    return sk.color.rgb2gray(image)
-
-def read(path):
-    return skio.imread(path)
-
-#Reads an image with given path as array of color channels
-def readColor(path):
-    image = skio.imread(path)
-    image_full = sk.img_as_float(image)
-    return image_full
-
-def readColors(path):
-    image = skio.imread(path)
-    image_full = sk.img_as_float(image)
-    image_colors = image_full.transpose(2, 0, 1)
-    return image_colors
-
 
 #Shows points on a given face image
 def showPoints(image, points):
@@ -46,21 +19,13 @@ def showImage(image):
     skio.imshow(image)
     skio.show()
 
-def pltShow(image):
-    plt.imshow(image)
-    plt.show()
-
-#Saves image to given path
-def saveImage(path, image):
-    skio.imsave(path, image)
-
 def showTri(image, points, tri):
     plt.triplot(points[:,0], points[:,1], tri.simplices)
     plt.plot(points[:,0], points[:,1], 'o')
     plt.imshow(image)
     plt.show()
 
-#Shows a Delaunay triagulation over an image
+# Shows a Delaunay triagulation over an image
 def showTriSave(image, points, tri, name):
     figure = plt.figure()
     plt.triplot(points[:,0], points[:,1], tri.simplices)
@@ -69,7 +34,7 @@ def showTriSave(image, points, tri, name):
     plt.show()
     figure.savefig(name)
 
-#Return homogenous matrix containing points
+# Return homogenous matrix containing points
 def homogenous(points):
     return np.row_stack((points.transpose(), (1, 1, 1)))
 
@@ -149,6 +114,7 @@ def lowPassMask(image, size, sigma, mask):
     output = rescale(output / mask_G)
     #showImage(output)
     return output
+
 """
 This method is based specifically on the matlab version of the paper.
 One thing it does is increase the size of the Gaussian kernel at each level
@@ -168,13 +134,15 @@ def LaplacianStackAlt(image, mask, stack_depth, useMask):
             stack[i] = rescale(stack[i] - stack[i+1]*mask)
         else:
             stack[i] = rescale(stack[i] - stack[i+1])
+  
     return stack
 
-#Aggregates all images in STACK
+# Aggregates all images in STACK
 def sumStack(stack):
     final_image = stack[0]
     for i in range(1, len(stack)):
         final_image += stack[i]
+  
     return rescale(final_image)
 
 # Warps IMAGE with SOURCE_POINTS to TARGET_POINTS with TRI
