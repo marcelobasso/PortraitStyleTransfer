@@ -1,47 +1,19 @@
-"""
-This file contains out algorithm for style transfer. 
-Time of execution is approximately 4 minutes with 
-image being of size 602x750.
-
-Args:
-    Input image, the image to have style transfer to it. Do not include the file extension, please put this image in images/ folder.
-    Example image, the image to transfer style from. Do not include the file extension, please put this image in images/ folder.
-    Bool: result in grayscale.
-    Bool: binary mask in the Laplacian stacks
-    Bool: correspondences found manually
-    Name of file to be outputted. Do not include extension.
-
-Example: 
-    $ python3 ./main.py jose george false true false jose_george_test
-"""
-
 import numpy as np
-import matplotlib.pyplot as plt
-import skimage as sk
-import skimage.io as skio
-import cv2
-import skimage.transform as sktr
-from imutils import face_utils
 import dlib
-from functions import *
+import cv2
+import skimage as sk
+import scipy.spatial
 from Settings import *
 import Utils as Utils
 
-# FIX:
-# - The output is not being saved correctly
-# - Remove multiple variables for input and for masks 
-#       Why do I need to load using cv and using skio?
-# - define pattern for naming variables and methods
-
 class StyleTransfer():
-    def __init__(self, input_file, example_file, gray_img, use_mask, output_file):
+    def __init__(self, input_file, example_file, gray_img, use_mask):
         """
         Args:
             input_file (str): name of the input image file
             example_file (str): name of the example image file
             gray_img (bool): flag to indicate if the output should be in grayscale
             use_mask (bool): flag to indicate if the mask should be used in the Laplacian stacks
-            output_file (str): name of the output file
         """
 
         # sets options
@@ -49,7 +21,6 @@ class StyleTransfer():
         self.example_file = example_file
         self.gray_img = gray_img
         self.use_mask = use_mask
-        self.output_file = output_file
 
         # loads images
         self.input = Utils.read_image(input_file)
@@ -82,7 +53,7 @@ class StyleTransfer():
             self.input = sk.color.rgb2gray(self.input_f)
             self.example = sk.color.rgb2gray(self.example_f)
             
-            gray = self.transfer_style(self.input, self.example, self.use_mask)
+            gray = self.transfer_style(self.input, self.example)
             gray = (sk.color.rgb2gray(background) * (1 - self.input_mask)) + (gray * self.input_mask)
             self.output = gray
         else:
@@ -91,41 +62,38 @@ class StyleTransfer():
 
             for c in range(len(self.example_channels)):
                 print(f"# Running for color channel {c}...")
-                channels.append(self.transfer_style(self.input_channels[c], self.example_channels[c], self.use_mask))
+                channels.append(self.transfer_style(self.input_channels[c], self.example_channels[c]))
                 self.output.append((background_colors[c] * (1 - self.input_mask)) + (channels[c] * self.input_mask))
 
             self.output = np.dstack(self.output)
 
-        cv2.imwrite(OUTPUTS_FOLDER + self.output_file + FILETYPE, self.output)
         cv2.imshow('result', self.output)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
     # This is based more off of the matlab code
-    def transfer_style(self, input_channel, example_channel, use_mask):
-        print("# Running style transfer...")
-        # https://pt.wikipedia.org/wiki/Triangula%C3%A7%C3%A3o_de_Delaunay
+    def transfer_style(self, input_channel, example_channel):
+        print("# --- Running style transfer ---")
+
+        # Given a set of points in the plane, Delaunay subdivides their convex hull[1] into 
+        # triangles whose circumcircles do not contain any of the points. This maximizes 
+        # the size of the smallest angle in any of the triangles.
         inputTri = scipy.spatial.Delaunay(self.input_lm)
-        # exampleTri = scipy.spatial.Delaunay(self.example_lm)
-        stack_depth = 6
+        exampleTri = scipy.spatial.Delaunay(self.example_lm)
 
-        lStackInput, lStackExample = getLaplacianStacks(input_channel, example_channel, self.input_mask, self.example_mask, stack_depth, use_mask)
-        input_residual = getResidual(input_channel, self.input_mask, stack_depth)
-        example_residual = getResidual(example_channel, self.example_mask, stack_depth)
+        input_ls, example_ls = self.laplacian_stacks(input_channel, example_channel)
+        input_residual, example_residual = Utils.get_residuals(input_channel, example_channel)
+        input_es = self.get_local_energy_stack(input_ls)
+        example_es = self.get_local_energy_stack(example_ls)
+        warped_stack = Utils.warp_energy_stack(example_es, self.input_lm, inputTri, self.example_lm)
+        gain_stack = self.robust_transfer(input_ls, warped_stack, input_es)
+        warped_residual = Utils.warp(example_residual, self.example_lm, self.input_lm, inputTri)
 
+        gain_stack.append(warped_residual)
+        gain_stack.append(input_residual)
+        output = sum(gain_stack)
 
-        inputEStack = getLocalEnergyStack(lStackInput)
-        exampleEStack = getLocalEnergyStack(lStackExample)
-
-        warpedStack = warpEnergyStack(exampleEStack, self.input_lm, inputTri, self.example_lm)
-
-        gainStack = robustTransfer(lStackInput, warpedStack, inputEStack)
-        warpedEResidual = warp(example_residual, self.example_lm, self.input_lm, inputTri)
-
-        gainStack.append(warpedEResidual)
-        output = sumStack(gainStack)
-
-        return rescale(output)
+        return Utils.rescale(output)
     
     def extract_background(self):
         """
@@ -143,73 +111,69 @@ class StyleTransfer():
                 mask = np.bitwise_or(np.roll(mask, shift, axis=axis), mask)
         
         background = cv2.inpaint(self.example, mask, 3, cv2.INPAINT_TELEA)
+        cv2.imwrite(INPUTS_FOLDER + self.example_file + BACKGROUND + FILETYPE, background)
 
         return background
-
-
-def getGaussianStacks(inputIm, exampleIm, stack_depth):
-    gStackInput = GaussianStack(inputIm, 45, 2, stack_depth)
-    gStackExample = GaussianStack(exampleIm, 45, 2, stack_depth)
-    return gStackInput, gStackExample
-
-def getLaplacianStacks(inputIm, exampleIm, input_mask, example_mask, stack_depth, use_mask):
-    lStackInput = LaplacianStackAlt(inputIm, input_mask, stack_depth, use_mask)
-    lStackExample = LaplacianStackAlt(exampleIm, example_mask, stack_depth, use_mask)
-    return lStackInput, lStackExample
-
-def getResidualStack(img, imgStack):
-    residualStack = []
-    for g in imgStack:
-        residualStack.append(cv2.convolve(img, g))
-    return residualStack
-
-def getResidual(image, mask, stack_depth):
-    return lowPass(image, 5*(2**stack_depth), 2**stack_depth)
-
-def getLocalEnergyStack(lStack):
-    energyStack = []
-    for i in range(len(lStack)):
-        laplacian = lStack[i]
-        laplacian_squared = np.square(laplacian)
-        energy = lowPass(laplacian_squared, 5*(2**(i+1)), 2**(i+1))
-        energyStack.append(energy)
-    return energyStack
-
-def warpEnergyStack(eStack, input_shape, inputTri, example_shape):
-    """
-    Warp every triangle from example triangulation to input triangulation here    
-    """
-
-    warpedStack = []
     
-    for elem in eStack:
-        warped = warp(elem, example_shape, input_shape, inputTri)
-        warpedStack.append(warped)
+    def laplacian_stack(self, image, mask):
+        """
+        Generates the Lalaclian stack by applying a Gaussian over and over
+        to the image, creating a Gaussian Stack, 
+        """
+        stack = []
+        stack.append(image)
 
-    return warpedStack
+        # creates Gaussian Stack
+        for i in range(1, STACKS_DEPTH):
+            sigma = 2 ** i
+            stack.append(Utils.lowPass(image, sigma * 5, sigma))
 
-#Alternate approach of warping the Laplacian stacks before estimating energy
-def warpLapStack(lStack, example_shape, input_shape, inputTri):
-    warpedLapStack = []
-    for elem in lStack:
-        warped = warp(elem, example_shape, input_shape, inputTri)
-        warpedLapStack.append(warped)
+        # creates Laplacian Stack
+        mask_mult = 1 if self.use_mask else mask
+        for i in range(len(stack) - 1):
+            stack[i] = Utils.rescale(stack[i] - stack[i+1] * mask_mult)
 
-    return warpedLapStack
+        return stack
+    
+    def laplacian_stacks(self, input_c, example_c):
+        """
+        Returns the Laplacian stacks for the input and example images.
+        Args:
+            input_c (np.array): input image channel
+            example_c (np.array): example image channel
+        """
+        print("# Getting Laplacian stacks...")
+        lStackInput = self.laplacian_stack(input_c, self.input_mask)
+        example_ls = self.laplacian_stack(example_c, self.example_mask)
+        return lStackInput, example_ls
 
-#Performs Robust transfer and gain clamping
-def robustTransfer(inputLapStack, warpedStack, inputEStack):
-    newGainStack = []
-    e_0 = 0.01 ** 2
-    gain_max = 2.8
-    gain_min = 0.9
-    for i in range(len(inputLapStack)):
-        gain = (warpedStack[i] / (inputEStack[i] + e_0)) ** 0.5
-        gain[gain > gain_max] = gain_max
-        gain[gain < gain_min] = gain_min
-        gain = lowPass(gain, 5*(2**i), 3*(2**i))
-        newLayer = inputLapStack[i] * gain
-        newGainStack.append(newLayer)
+    def get_local_energy_stack(self, laplacian_s):
+        print("# Getting local energy...")
+        
+        stack = []
+        for i in range(len(laplacian_s)):
+            laplacian_squared = np.square(laplacian_s[i])
+            kernel_size = 2 ** (i + 1)
+            energy = Utils.lowPass(laplacian_squared, 5 * kernel_size, kernel_size)
+            stack.append(energy)
 
-    return newGainStack
+        return stack
+    
+    def robust_transfer(self, input_ls, warped_es, input_es):
+        print("# Robust transfer...")
+        new_gain_stack = []
+        e_0 = 0.01 ** 2
+        gain_max = 2.8
+        gain_min = 0.9
+        
+        for i in range(len(input_ls)):
+            gain = (warped_es[i] / (input_es[i] + e_0)) ** 0.5
+            gain[gain > gain_max] = gain_max
+            gain[gain < gain_min] = gain_min
+            kernel_size = 2 ** (i + 1)
+            gain = Utils.lowPass(gain, 5 * kernel_size, 5 * kernel_size)
+            new_layer = input_ls[i] * gain
+            new_gain_stack.append(new_layer)
+
+        return new_gain_stack
 
