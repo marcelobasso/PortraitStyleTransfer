@@ -15,6 +15,7 @@ class StyleTransfer():
             gray_img (bool): flag to indicate if the output should be in grayscale
             use_mask (bool): flag to indicate if the mask should be used in the Laplacian stacks
         """
+        Utils.log("Initializing Style Transfer...")
 
         # sets options
         self.input_file = input_file
@@ -61,7 +62,7 @@ class StyleTransfer():
             channels = []
 
             for c in range(len(self.example_channels)):
-                print(f"# Running for color channel {c}...")
+                Utils.log(f"  Running for color channel {c}...")
                 channels.append(self.transfer_style(self.input_channels[c], self.example_channels[c]))
                 self.output.append((background_colors[c] * (1 - self.input_mask)) + (channels[c] * self.input_mask))
 
@@ -71,15 +72,10 @@ class StyleTransfer():
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    # This is based more off of the matlab code
+    # Based on the Matlab version of the code
     def transfer_style(self, input_channel, example_channel):
-        print("# --- Running style transfer ---")
-
-        # Given a set of points in the plane, Delaunay subdivides their convex hull[1] into 
-        # triangles whose circumcircles do not contain any of the points. This maximizes 
-        # the size of the smallest angle in any of the triangles.
+        Utils.log("Running style transfer")
         inputTri = scipy.spatial.Delaunay(self.input_lm)
-        exampleTri = scipy.spatial.Delaunay(self.example_lm)
 
         input_ls, example_ls = self.laplacian_stacks(input_channel, example_channel)
         input_residual, example_residual = Utils.get_residuals(input_channel, example_channel)
@@ -90,21 +86,21 @@ class StyleTransfer():
         warped_residual = Utils.warp(example_residual, self.example_lm, self.input_lm, inputTri)
 
         gain_stack.append(warped_residual)
-        gain_stack.append(input_residual)
+        # gain_stack.append(input_residual)
         output = sum(gain_stack)
 
         return Utils.rescale(output)
     
     def extract_background(self):
         """
-            Remoevs the person on the example portrair and fill in those 
-            regions using image inpainting, which fill in these areas 
+            Removes the person on the example portrair and fills in those 
+            regions using image inpainting, which fills in these areas 
             seamlessly so that they blend naturally with the rest of the 
             image.
         """
         SHIFT_AMOUNT = 8
         mask = Utils.read_image(self.example_file + MASK_SUFIX, color=cv2.IMREAD_GRAYSCALE)
-        print("# Extracting example background...")
+        Utils.log("  Extracting example background...")
 
         for axis in (1, 0):  # 1 for horizontal, 0 for vertical
             for shift in (SHIFT_AMOUNT, -1 * SHIFT_AMOUNT):  # Shift forward and backward
@@ -116,17 +112,13 @@ class StyleTransfer():
         return background
     
     def laplacian_stack(self, image, mask):
-        """
-        Generates the Lalaclian stack by applying a Gaussian over and over
-        to the image, creating a Gaussian Stack, 
-        """
         stack = []
         stack.append(image)
 
         # creates Gaussian Stack
         for i in range(1, STACKS_DEPTH):
             sigma = 2 ** i
-            stack.append(Utils.lowPass(image, sigma * 5, sigma))
+            stack.append(Utils.lowPass(image, sigma * G_MULTIPLIER, sigma))
 
         # creates Laplacian Stack
         mask_mult = 1 if self.use_mask else mask
@@ -138,42 +130,41 @@ class StyleTransfer():
     def laplacian_stacks(self, input_c, example_c):
         """
         Returns the Laplacian stacks for the input and example images.
+        Images are in the range [0, 1]
         Args:
             input_c (np.array): input image channel
             example_c (np.array): example image channel
         """
-        print("# Getting Laplacian stacks...")
+        Utils.log("  Getting Laplacian stacks...")
         lStackInput = self.laplacian_stack(input_c, self.input_mask)
         example_ls = self.laplacian_stack(example_c, self.example_mask)
         return lStackInput, example_ls
 
     def get_local_energy_stack(self, laplacian_s):
-        print("# Getting local energy...")
+        Utils.log("  Getting local energy...")
         
         stack = []
         for i in range(len(laplacian_s)):
             laplacian_squared = np.square(laplacian_s[i])
             kernel_size = 2 ** (i + 1)
-            energy = Utils.lowPass(laplacian_squared, 5 * kernel_size, kernel_size)
+            energy = Utils.lowPass(laplacian_squared, G_MULTIPLIER * kernel_size, kernel_size)
             stack.append(energy)
 
         return stack
     
     def robust_transfer(self, input_ls, warped_es, input_es):
-        print("# Robust transfer...")
+        Utils.log("  Robust transfer...")
         new_gain_stack = []
         e_0 = 0.01 ** 2
-        gain_max = 2.8
-        gain_min = 0.9
         
         for i in range(len(input_ls)):
             gain = (warped_es[i] / (input_es[i] + e_0)) ** 0.5
-            gain[gain > gain_max] = gain_max
-            gain[gain < gain_min] = gain_min
+            gain[gain > MAX_GAIN] = MAX_GAIN
+            gain[gain < MIN_GAIN] = MIN_GAIN
+
             kernel_size = 2 ** (i + 1)
-            gain = Utils.lowPass(gain, 5 * kernel_size, 5 * kernel_size)
-            new_layer = input_ls[i] * gain
-            new_gain_stack.append(new_layer)
+            gain = Utils.lowPass(gain, G_MULTIPLIER * kernel_size, G_MULTIPLIER * kernel_size)
+            new_gain_stack.append(input_ls[i] * gain)
 
         return new_gain_stack
 

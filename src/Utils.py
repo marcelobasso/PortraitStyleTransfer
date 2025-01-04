@@ -13,9 +13,13 @@ from Settings import *
 from scipy.interpolate import RegularGridInterpolator
 from skimage.draw import polygon
 from scipy.interpolate import interp2d
+from time import gmtime, strftime
+
+def log(message):
+    print(strftime("%H:%M:%S", gmtime()) + ": " + message)
 
 def get_facial_landmarks(detector, predictor, image):
-    print("# Getting facial landmarks...")
+    log("  Getting facial landmarks...")
     
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     rects = detector(gray, 1)
@@ -76,7 +80,7 @@ def homogenous(points):
 
 def get_residuals(input, example):
     kernel_size = 2 ** STACKS_DEPTH
-    return lowPass(input, 5 * kernel_size, kernel_size), lowPass(example, 5 * kernel_size, kernel_size)
+    return lowPass(input, G_MULTIPLIER * kernel_size, kernel_size), lowPass(example, G_MULTIPLIER * kernel_size, kernel_size)
 
 """
 Used to recover the affine transformation given two sets of points
@@ -87,9 +91,11 @@ Solution found at https://stackoverflow.com/questions/27546081/
 determining-a-homogeneous-affine-transformation-matrix-from-six-points-in-3d-usi
 """
 def computeAffine(tri_points1, tri_points2):
-    #A is going to be the matrix with tri_points1
     source_matrix = homogenous(tri_points1)
     target_matrix = homogenous(tri_points2)
+
+    # sometimes this generates an excepetion and I don't fully comprehend why
+    # but I put a try-except here and I'm gonna pretend it never happened.
     try:
         T = np.matmul(target_matrix, np.linalg.inv(source_matrix))
     except np.linalg.LinAlgError:
@@ -98,18 +104,18 @@ def computeAffine(tri_points1, tri_points2):
     return T
 
 def warp_energy_stack(es, input_shape, input_tri, example_shape):
-        print("# Warping energy stack...")
-        warped_stack = []
-        
-        for elem in es:
-            warped = warp(elem, example_shape, input_shape, input_tri)
-            warped_stack.append(warped)
+    log("  Warping energy stack...")
+    warped_stack = []
+    
+    for elem in es:
+        warped = warp(elem, example_shape, input_shape, input_tri)
+        warped_stack.append(warped)
 
-        return warped_stack
+    return warped_stack
 
 def warp(image, source_points, target_points, tri):
     # Warps IMAGE with SOURCE_POINTS to TARGET_POINTS with TRI
-    print("# Warping image...")
+    log("    Warping image...")
     imh, imw = image.shape
     out_image = np.zeros((imh, imw))
     xs = np.arange(imw)
@@ -118,14 +124,15 @@ def warp(image, source_points, target_points, tri):
     interpFN = RegularGridInterpolator((ys, xs), image, bounds_error=False, fill_value=0)
 
     for triangle_indices in tri.simplices:
-
         source_triangle = source_points[triangle_indices]
         target_triangle = target_points[triangle_indices]
         A = computeAffine(source_triangle, target_triangle)
+        
         try:
             A_inverse = np.linalg.inv(A)
         except np.linalg.LinAlgError:
             A_inverse = A
+
         tri_rows = target_triangle.transpose()[1]
         tri_cols = target_triangle.transpose()[0]
 
@@ -137,11 +144,10 @@ def warp(image, source_points, target_points, tri):
 
             # Point inside source image
             point_on_source = np.dot(A_inverse, point_in_target)
-
             x_source, y_source = point_on_source[:2]
 
             # Interpolate source value
-            source_value = interpFN([y_source, x_source])  # Note: (y, x) order for RegularGridInterpolator
+            source_value = interpFN([y_source, x_source])  # (y, x) order 
 
             try:
                 out_image[y, x] = source_value
