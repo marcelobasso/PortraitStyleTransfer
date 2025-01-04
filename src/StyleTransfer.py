@@ -2,6 +2,7 @@ import numpy as np
 import dlib
 import cv2
 import skimage as sk
+import skimage.io as skio
 import scipy.spatial
 from Settings import *
 import Utils as Utils
@@ -31,8 +32,6 @@ class StyleTransfer():
         self.input_f = self.input.astype(np.float32) / 255.0
         self.example_f = self.example.astype(np.float32) / 255.0
 
-        self.input_channels = self.input_f.transpose(2, 0, 1)
-        self.example_channels = self.example_f.transpose(2, 0, 1)
         self.input_mask = Utils.read_image(input_file + MASK_SUFIX, color=cv2.IMREAD_GRAYSCALE, img_float=True)
         self.example_mask = Utils.read_image(example_file + MASK_SUFIX, color=cv2.IMREAD_GRAYSCALE, img_float=True)
 
@@ -51,13 +50,20 @@ class StyleTransfer():
         background = self.extract_background()
 
         if self.gray_img:
-            self.input = sk.color.rgb2gray(self.input_f)
-            self.example = sk.color.rgb2gray(self.example_f)
+            self.input = self.input_f
+            self.example = self.example_f
+            if (len(self.input_f.shape) > 2):
+                self.input = sk.color.rgb2gray(self.input_f)
+            if (len(self.example_f.shape) > 2):
+                self.example = sk.color.rgb2gray(self.example_f)
             
             gray = self.transfer_style(self.input, self.example)
-            gray = (sk.color.rgb2gray(background) * (1 - self.input_mask)) + (gray * self.input_mask)
+            bg = sk.color.rgb2gray(background) if len(background.shape) > 2 else background
+            gray = (bg * (1 - self.input_mask)) + (gray * self.input_mask)
             self.output = gray
         else:
+            self.input_channels = self.input_f.transpose(2, 0, 1)
+            self.example_channels = self.example_f.transpose(2, 0, 1)
             background_colors = background.transpose(2, 0, 1)
             channels = []
 

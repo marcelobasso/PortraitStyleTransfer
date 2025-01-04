@@ -21,7 +21,10 @@ def log(message):
 def get_facial_landmarks(detector, predictor, image):
     log("  Getting facial landmarks...")
     
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = image
+    if len(image.shape) > 2:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
     rects = detector(gray, 1)
     shape = None
 
@@ -33,7 +36,7 @@ def get_facial_landmarks(detector, predictor, image):
 
         for corner in corners:
             shape = np.vstack((shape, corner))
-
+    
     return shape
 
 def read_image(file, color=cv2.COLOR_BGR2RGB, img_float=False):
