@@ -90,7 +90,11 @@ def computeAffine(tri_points1, tri_points2):
     #A is going to be the matrix with tri_points1
     source_matrix = homogenous(tri_points1)
     target_matrix = homogenous(tri_points2)
-    T = np.matmul(target_matrix, np.linalg.inv(source_matrix))
+    try:
+        T = np.matmul(target_matrix, np.linalg.inv(source_matrix))
+    except np.linalg.LinAlgError:
+        return source_matrix
+
     return T
 
 def warp_energy_stack(es, input_shape, input_tri, example_shape):
@@ -118,8 +122,10 @@ def warp(image, source_points, target_points, tri):
         source_triangle = source_points[triangle_indices]
         target_triangle = target_points[triangle_indices]
         A = computeAffine(source_triangle, target_triangle)
-        A_inverse = np.linalg.inv(A)
-
+        try:
+            A_inverse = np.linalg.inv(A)
+        except np.linalg.LinAlgError:
+            A_inverse = A
         tri_rows = target_triangle.transpose()[1]
         tri_cols = target_triangle.transpose()[0]
 
