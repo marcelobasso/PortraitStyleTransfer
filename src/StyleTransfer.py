@@ -161,15 +161,14 @@ class StyleTransfer():
     def robust_transfer(self, input_ls, warped_es, input_es):
         Utils.log("  Robust transfer...")
         new_gain_stack = []
-        e_0 = 0.01 ** 2
+        e_0 = 0.01 ** 2 # proposed by paper
         
         for i in range(len(input_ls)):
-            gain = (warped_es[i] / (input_es[i] + e_0)) ** 0.5
+            fract = warped_es[i] / (input_es[i] + e_0)
+            gain = fract ** (0.5 if fract.all() > 0 else 1)
             gain[gain > MAX_GAIN] = MAX_GAIN
             gain[gain < MIN_GAIN] = MIN_GAIN
 
-            kernel_size = 2 ** (i + 1)
-            gain = Utils.lowPass(gain, G_MULTIPLIER * kernel_size, G_MULTIPLIER * kernel_size)
             new_gain_stack.append(input_ls[i] * gain)
 
         return new_gain_stack

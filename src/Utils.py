@@ -116,7 +116,7 @@ def warp_energy_stack(es, input_shape, input_tri, example_shape):
 
     return warped_stack
 
-def warp(image, source_points, target_points, tri):
+def warp(image, source_points, target_points, input_tri):
     # Warps IMAGE with SOURCE_POINTS to TARGET_POINTS with TRI
     log("    Warping image...")
     imh, imw = image.shape
@@ -126,7 +126,7 @@ def warp(image, source_points, target_points, tri):
 
     interpFN = RegularGridInterpolator((ys, xs), image, bounds_error=False, fill_value=0)
 
-    for triangle_indices in tri.simplices:
+    for triangle_indices in input_tri.simplices:
         source_triangle = source_points[triangle_indices]
         target_triangle = target_points[triangle_indices]
         A = computeAffine(source_triangle, target_triangle)
@@ -158,5 +158,4 @@ def warp(image, source_points, target_points, tri):
                 continue
 
     return out_image
-
 
