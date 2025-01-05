@@ -13,8 +13,8 @@ class StyleTransfer():
         Args:
             input_file (str): name of the input image file
             example_file (str): name of the example image file
-            gray_img (bool): flag to indicate if the output should be in grayscale
-            use_mask (bool): flag to indicate if the mask should be used in the Laplacian stacks
+            gray_img (bool): indicates if the output should be in grayscale
+            use_mask (bool): indicates if the mask should be used in the Laplacian stacks
         """
         Utils.log("Initializing Style Transfer...")
 
@@ -28,7 +28,7 @@ class StyleTransfer():
         self.input = Utils.read_image(input_file)
         self.example = Utils.read_image(example_file)
 
-        # values in the range [0, 1]. But why?
+        # values in the range [0, 1]. 
         self.input_f = self.input.astype(np.float32) / 255.0
         self.example_f = self.example.astype(np.float32) / 255.0
 
@@ -48,6 +48,7 @@ class StyleTransfer():
         """
 
         background = self.extract_background()
+        background = background.astype(np.float32) / 255.0
 
         if self.gray_img:
             self.input = self.input_f
@@ -92,7 +93,6 @@ class StyleTransfer():
         warped_residual = Utils.warp(example_residual, self.example_lm, self.input_lm, inputTri)
 
         gain_stack.append(warped_residual)
-        # gain_stack.append(input_residual)
         output = sum(gain_stack)
 
         return Utils.rescale(output)
@@ -104,7 +104,6 @@ class StyleTransfer():
             seamlessly so that they blend naturally with the rest of the 
             image.
         """
-        SHIFT_AMOUNT = 8
         mask = Utils.read_image(self.example_file + MASK_SUFIX, color=cv2.IMREAD_GRAYSCALE)
         Utils.log("  Extracting example background...")
 
@@ -159,6 +158,14 @@ class StyleTransfer():
         return stack
     
     def robust_transfer(self, input_ls, warped_es, input_es):
+        """
+        Implements the robust transfer algorithm proposed in the paper.
+
+        Args:
+            input_ls (list): Laplacian stack of the input image
+            warped_es (list): warped local energy stack of the example image
+            input_es (list): local energy stack of the input image
+        """
         Utils.log("  Robust transfer...")
         new_gain_stack = []
         e_0 = 0.01 ** 2 # proposed by paper
@@ -169,6 +176,8 @@ class StyleTransfer():
             gain[gain > MAX_GAIN] = MAX_GAIN
             gain[gain < MIN_GAIN] = MIN_GAIN
 
+            kernel_size = 2 ** (i + 1)
+            gain = Utils.lowPass(gain, G_MULTIPLIER * kernel_size, G_MULTIPLIER * kernel_size)
             new_gain_stack.append(input_ls[i] * gain)
 
         return new_gain_stack

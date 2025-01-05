@@ -9,7 +9,8 @@ MASK_SUFIX = '_mask'
 BACKGROUND = '_background'
 
 ### Algorithm parameters
-STACKS_DEPTH = 5 # different than paper
-G_MULTIPLIER = 3 # same as paper
-MIN_GAIN = 0.7 # close to paper
-MAX_GAIN = 3.1 # close to paper
+SHIFT_AMOUNT = 8 # used in the background extraction
+STACKS_DEPTH = 5 # paper = 6
+G_MULTIPLIER = 3 # paper = 3
+MIN_GAIN = 0.7 # paper = 0.9
+MAX_GAIN = 3.1 # paper = 2.9

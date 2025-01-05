@@ -1,3 +1,6 @@
 *.dat
 .venv
 __pycache__
+presentation/
+data/
+index.html
