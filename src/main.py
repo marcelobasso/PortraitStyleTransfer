@@ -20,7 +20,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 5:
         print("Error: Invalid arguments")
         print("Usage: python3 main.py <input_image> <example_image> <gray> <use_mask>")
-        print("Example: python3 main.py carlos george false true")
+        print("Example: python3 main.py marcelo george false true")
         sys.exit(1)
     else:
         input_img = sys.argv[1]

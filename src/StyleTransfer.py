@@ -79,7 +79,6 @@ class StyleTransfer():
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    # Based on the Matlab version of the code
     def transfer_style(self, input_channel, example_channel):
         Utils.log("Running style transfer")
         inputTri = scipy.spatial.Delaunay(self.input_lm)
